@@ -1,0 +1,74 @@
+# TCN config for fingerflex decoding experiments
+# Same Lomtev preprocessing and training hyperparameters as fingerflex_lomtev.yaml.
+# Only the model section differs — TCN replaces U-Net.
+
+seed: 42
+
+data:
+  task: fingerflex
+  patient: bp            # One of: bp, cc, ht, jc, jp, mv, wc, wm, zt
+  data_dir: data/fingerflex
+  sr: 1000               # Sampling rate (Hz)
+  n_targets: 5           # 5 fingers
+
+preprocessing:
+  pipeline_mode: lomtev  # 'ours' or 'lomtev'
+  apply_car: true
+  notch_freqs: [60, 120, 180]
+  bandpass_lo: 40.0      # Lomtev: 40 Hz
+  bandpass_hi: 300.0     # Lomtev: 300 Hz
+  normalize: true
+
+preprocessing_lomtev:
+  bandpass_lo: 40.0
+  bandpass_hi: 300.0
+  notch_freqs: [60, 120, 180]   # 60 Hz + harmonics (US data)
+  n_wavelets: 40
+  downsample_fs: 100
+  time_delay_sec: 0.2
+  n_jobs: 1
+
+windowing:
+  window_size: 1000      # Samples (= 1 second at 1000 Hz)
+  hop_size: 100          # Samples (= 100 ms hop -> 10 Hz output rate)
+
+windowing_lomtev:
+  sample_len: 256               # 256 @ 100 Hz = 2.56s
+  stride: 1
+
+split:
+  train_frac: 0.70
+  val_frac: 0.15
+  test_frac: 0.15
+
+model:
+  name: tcn
+  hidden_channels: 64
+  kernel_size: 5
+  n_blocks: 6
+  dilation_base: 2
+  dropout: 0.1
+  strides: [1]           # No downsampling — used by trainer for time alignment
+
+training:
+  batch_size: 128        # Lomtev: 128
+  epochs: 20             # Lomtev: 20
+  optimizer: adam
+  lr: 8.42e-5            # Lomtev's exact LR
+  weight_decay: 1.0e-6   # Lomtev: 1e-6
+  scheduler: reduce_on_plateau
+  scheduler_patience: 5
+  scheduler_factor: 0.5
+  early_stopping_patience: 15
+  grad_clip_max_norm: 1.0
+  loss: mse_cosine       # Lomtev: 0.5*MSE + 0.5*(1-cos)
+
+evaluation:
+  metric: pearson_r      # Primary metric
+  smooth_sigma_val: 6    # Gaussian sigma for validation — matches FingerFlex
+  smooth_sigma_test: 1   # Gaussian sigma for test — matches FingerFlex
+
+logging:
+  use_wandb: true
+  wandb_project: plact-motor-decoding
+  tags: [miller, tcn]

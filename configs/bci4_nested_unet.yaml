@@ -1,0 +1,68 @@
+# DeepFingerNet reproduction config (Milestone 5.9)
+#
+# Reproduces Tao et al. 2025 (IEEE TIM) on BCI-IV Dataset 4.
+# Architecture: 3-level UNet++ with dense skip connections.
+#
+# Key differences vs published DeepFingerNet:
+#   - Our input: (B, 62*40=2480, T) Morlet spectrograms (same preprocessing)
+#   - Their input: unclear — paper claims 1.30 MB (~340K params) which implies
+#     smaller input; our model will be ~1-2M params due to 2480-ch spatial reduce
+#   - Training: val_frac=0.15 (we carve 15% for monitoring vs their 6.5:3.5 custom split)
+#   - No sigma smoothing in eval (their reported 0.694 = no smoothing, directly
+#     comparable to our sigma=1 numbers)
+#
+# Target: mean test_r ≈ 0.694 (subject-avg from paper) or at least > 0.621 (our Transformer)
+#
+# Expected: S1≈0.71, S2≈0.59, S3≈0.77, mean≈0.69
+
+seed: 42
+
+data:
+  task: bci4
+  subject: 1
+  data_dir: data/fingerflex
+  bci4_data_dir: data/bci4
+  sr: 1000
+  n_targets: 5
+
+preprocessing_lomtev:
+  bandpass_lo: 40.0
+  bandpass_hi: 300.0
+  notch_freqs: [50]
+  n_wavelets: 40
+  downsample_fs: 100
+  time_delay_sec: 0.2
+  n_jobs: 1
+
+windowing_lomtev:
+  sample_len: 256
+  stride: 1
+
+split:
+  val_frac: 0.15
+
+model:
+  name: nested_unet
+  n_channels_out: 5
+  base_ch: 32
+  kernel_size: 3
+
+training:
+  batch_size: 128
+  epochs: 20
+  optimizer: adam
+  lr: 2.0e-5             # DeepFingerNet learning rate
+  weight_decay: 1.0e-6
+  scheduler: none         # Paper uses fixed LR + early stopping
+  early_stopping_patience: 20   # Run all 20 epochs
+  grad_clip_max_norm: 1.0
+  loss: mse_cosine        # 0.5*MSE + 0.5*cosine (matches paper eq. 8 with λ=0.5)
+
+evaluation:
+  metric: pearson_r
+  smooth_sigma_val: 1     # No smoothing — DeepFingerNet 0.694 is unsmoothed
+  smooth_sigma_test: 1    # Direct comparison to their published numbers
+
+logging:
+  use_wandb: false
+  tags: [bci4, nested_unet, deepfingernet, reproduction]

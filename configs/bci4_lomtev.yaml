@@ -1,0 +1,63 @@
+# Lomtev-faithful config for BCI Competition IV Dataset 4
+# Matches FingerFlex (Lomtev, 2023) exactly — this is the dataset they used.
+# Key differences from fingerflex_lomtev.yaml:
+#   - 50 Hz powerline (European data)
+#   - Pre-split train/test (validation carved from train)
+#   - Finger data at 25 Hz (interpolated to 100 Hz)
+
+seed: 42
+
+data:
+  task: bci4
+  subject: 1              # One of: 1, 2, 3
+  data_dir: data/fingerflex  # unused for bci4, but kept for compat
+  bci4_data_dir: data/bci4
+  sr: 1000                # ECoG sampling rate (Hz)
+  n_targets: 5            # 5 fingers
+
+preprocessing_lomtev:
+  bandpass_lo: 40.0
+  bandpass_hi: 300.0
+  notch_freqs: [50]       # 50 Hz for European data
+  n_wavelets: 40
+  downsample_fs: 100
+  time_delay_sec: 0.2
+  n_jobs: 1
+
+windowing_lomtev:
+  sample_len: 256          # 256 @ 100 Hz = 2.56s
+  stride: 1
+
+split:
+  val_frac: 0.15           # Carve from training data (test is pre-split)
+
+model:
+  name: unet_lomtev
+  n_channels_out: 5
+  channels: [32, 32, 64, 64, 128, 128]
+  kernel_sizes: [7, 7, 5, 5, 5]
+  strides: [2, 2, 2, 2, 2]
+  dilation: [1, 1, 1, 1, 1]
+
+training:
+  batch_size: 128
+  epochs: 20
+  optimizer: adam
+  lr: 8.42e-5
+  weight_decay: 1.0e-6
+  scheduler: reduce_on_plateau
+  scheduler_patience: 5
+  scheduler_factor: 0.5
+  early_stopping_patience: 15
+  grad_clip_max_norm: 1.0
+  loss: mse_cosine           # 0.5*MSE + 0.5*(1-cos)
+
+evaluation:
+  metric: pearson_r
+  smooth_sigma_val: 6    # Gaussian σ for validation — matches FingerFlex
+  smooth_sigma_test: 1   # Gaussian σ for test — matches FingerFlex
+
+logging:
+  use_wandb: true
+  wandb_project: plact-motor-decoding
+  tags: [bci4, lomtev, unet]

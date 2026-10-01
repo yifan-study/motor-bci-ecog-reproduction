@@ -1,0 +1,64 @@
+# FingerFlex v1 faithful reproduction config (Milestone 5.8)
+#
+# Training setup matches the original FingerFlex notebook exactly:
+#   - Train on 100% of official BCI-IV train split (400s), no val carve
+#   - Official test set (200s) used as validation monitor (same as notebook)
+#   - Fixed LR Adam, no scheduler — FingerFlex runs all 20 epochs
+#   - Evaluate with sigma=6 (their reported metric) AND sigma=1 (honest)
+#
+# Expected: test_r sigma=6 ≈ S1=0.686, S2=0.633, S3=0.737 (FingerFlex published)
+
+seed: 42
+
+data:
+  task: bci4
+  subject: 1
+  data_dir: data/fingerflex
+  bci4_data_dir: data/bci4
+  sr: 1000
+  n_targets: 5
+
+preprocessing_lomtev:
+  bandpass_lo: 40.0
+  bandpass_hi: 300.0
+  notch_freqs: [50]
+  n_wavelets: 40
+  downsample_fs: 100
+  time_delay_sec: 0.2
+  n_jobs: 1
+
+windowing_lomtev:
+  sample_len: 256
+  stride: 1
+
+split:
+  val_frac: 0.0           # Train on 100% of official split; test used as val monitor
+
+model:
+  name: unet_lomtev
+  n_channels_out: 5
+  channels: [32, 32, 64, 64, 128, 128]
+  kernel_sizes: [7, 7, 5, 5, 5]
+  strides: [2, 2, 2, 2, 2]
+  dilation: [1, 1, 1, 1, 1]
+
+training:
+  batch_size: 128
+  epochs: 20
+  optimizer: adam
+  lr: 8.42e-5
+  weight_decay: 1.0e-6
+  scheduler: none           # FingerFlex uses fixed LR — no scheduler
+  early_stopping_patience: 20  # Effectively disabled — run all 20 epochs
+  grad_clip_max_norm: 1.0
+  loss: mse_cosine
+
+evaluation:
+  metric: pearson_r
+  smooth_sigma_val: 6     # Matches FingerFlex validation callback (sigma=6)
+  smooth_sigma_test: 6    # Report sigma=6 to compare against their published numbers
+                          # Note: run a separate eval pass with sigma=1 for honest numbers
+
+logging:
+  use_wandb: false
+  tags: [bci4, lomtev, unet, full_split, reproduction]

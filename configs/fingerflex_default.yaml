@@ -1,0 +1,55 @@
+# Default config for fingerflex decoding experiments
+# All experiments should be fully reproducible from this config file.
+
+seed: 42
+
+data:
+  task: fingerflex
+  patient: bp            # One of: bp, cc, ht, jc, jp, mv, wc, wm, zt
+  data_dir: data/fingerflex
+  sr: 1000               # Sampling rate (Hz)
+  n_targets: 5           # 5 fingers
+
+preprocessing:
+  pipeline_mode: ours    # 'ours' (filter-first) or 'lomtev' (normalize-first)
+  apply_car: true
+  notch_freqs: [60, 120, 180]
+  bandpass_lo: 1.0
+  bandpass_hi: 200.0
+  normalize: true        # Z-score per channel (fit on train only)
+
+windowing:
+  window_size: 1000      # Samples (= 1 second at 1000 Hz)
+  hop_size: 100          # Samples (= 100 ms hop -> 10 Hz output rate)
+
+split:
+  train_frac: 0.70
+  val_frac: 0.15
+  test_frac: 0.15
+
+model:
+  name: unet             # One of: unet, tcn, transformer
+  # Architecture-specific params go in sub-keys
+
+training:
+  batch_size: 32
+  epochs: 100
+  optimizer: adam
+  lr: 1.0e-3
+  weight_decay: 0.0
+  scheduler: reduce_on_plateau
+  scheduler_patience: 5
+  scheduler_factor: 0.5
+  early_stopping_patience: 15
+  grad_clip_max_norm: 1.0
+  loss: mse
+
+evaluation:
+  metric: pearson_r      # Primary metric
+  smooth_sigma_val: 0    # No smoothing for our pipeline
+  smooth_sigma_test: 0
+
+logging:
+  use_wandb: true
+  wandb_project: plact-motor-decoding
+  tags: [miller, ours, unet]

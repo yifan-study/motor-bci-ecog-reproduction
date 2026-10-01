@@ -1,0 +1,76 @@
+# DTCNet faithful reproduction config (Milestone 5.10) — v2 (decoder fix)
+#
+# Paper: Wang et al. 2025, Frontiers in Computational Neuroscience
+#
+# Architecture: Dilated-transposed CNN encoder-decoder, 6 encoder stages,
+#   sawtooth dilations (1,2,3,1,2), feature dims 64→64→128→256→512→512.
+#   Skip connections from encoder to decoder at each stage.
+#   Decoder ordering (Sec 2.3.4): cat(skip) → Conv → LN → GELU → Drop → ConvTranspose
+#   (v1 had wrong ordering: ConvTranspose → cat → Conv → LN → GELU → Drop)
+#
+# Input: full Morlet spectrogram (N_ch × 40_freqs × T) → flattened (N_ch*40, T)
+#   Paper treats this as "3D" structure; we use standard flatten for 1D CNN.
+#
+# Train/val: 100% official BCI-IV train split (val_frac=0.0), official test as val.
+# Matches paper: "train on 100% of official split".
+#
+# Loss: MSE + cosine similarity (mse_cosine, lambda=0.5)
+# Optimizer: Adam lr=8.42e-5, wd=1e-6, dropout=0.1
+# NOTE: paper uses same lr as our Transformer best — good sign.
+#
+# Notch: 60 Hz — paper Sec 2.2.2: "notch filter [...] 60 Hz power line frequency
+# and its harmonics" (US recording, BCI-IV is BCI2000 system).
+#
+# Target: mean=0.69 (S1=0.71, S2=0.59, S3=0.77), sigma=1
+
+seed: 42
+
+data:
+  task: bci4
+  subject: 1
+  data_dir: data/fingerflex
+  bci4_data_dir: data/bci4
+  sr: 1000
+  n_targets: 5
+
+preprocessing_lomtev:
+  bandpass_lo: 40.0
+  bandpass_hi: 300.0
+  notch_freqs: [60]          # paper Sec 2.2.2: 60 Hz power line (US data)
+  n_wavelets: 40             # full 40-freq Morlet spectrogram
+  downsample_fs: 100
+  time_delay_sec: 0.2
+  n_jobs: 1
+
+windowing_lomtev:
+  sample_len: 256
+  stride: 1
+
+split:
+  val_frac: 0.0              # official test as val — matches paper
+
+model:
+  name: dtcnet
+  dropout: 0.1
+  strides: [2, 2, 2, 2, 2]    # 5 MaxPool(2) stages → total_stride=32 for T alignment
+
+training:
+  batch_size: 128
+  epochs: 40                 # paper doesn't specify; use 40 with early stopping
+  optimizer: adam
+  lr: 8.42e-5                # same lr as our Transformer best
+  weight_decay: 1.0e-6
+  scheduler: reduce_on_plateau
+  scheduler_patience: 8
+  early_stopping_patience: 20
+  grad_clip_max_norm: 1.0
+  loss: mse_cosine
+
+evaluation:
+  metric: pearson_r
+  smooth_sigma_val: 1
+  smooth_sigma_test: 1
+
+logging:
+  use_wandb: false
+  tags: [bci4, dtcnet, reproduction, milestone5.10]

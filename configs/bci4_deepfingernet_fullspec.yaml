@@ -1,0 +1,63 @@
+# DeepFingerNet full-spectrogram variant (Milestone 5.9 attempt 2)
+#
+# Paper spec says input is (N_channels × 40, time) — flattened Morlet spectrogram.
+# Attempt 1 (n_wavelets=0, summed wavelet power) gave mean=0.252 — too weak.
+# This uses the full 40-freq spectrogram (n_wavelets=40) as input, same as U-Net baseline.
+# n_channels_in = 62 * 40 = 2480  →  ~846K params (vs paper's ~325K)
+# Param mismatch is known; testing if full spectrogram fixes the 3× performance gap.
+#
+# Data split: val_frac=0.0 → official BCI-IV train (400s) for training,
+#   official test (200s) as validation — matches paper's "predivided 6.5:3.5"
+
+seed: 42
+
+data:
+  task: bci4
+  subject: 1
+  data_dir: data/fingerflex
+  bci4_data_dir: data/bci4
+  sr: 1000
+  n_targets: 5
+
+preprocessing_lomtev:
+  bandpass_lo: 40.0
+  bandpass_hi: 300.0
+  notch_freqs: [50]
+  n_wavelets: 40         # full Morlet spectrogram → (N_ch × 40, T)
+  downsample_fs: 100
+  time_delay_sec: 0.2
+  n_jobs: 1
+
+windowing_lomtev:
+  sample_len: 256
+  stride: 1
+
+split:
+  val_frac: 0.0          # official test set used as validation
+
+model:
+  name: nested_unet
+  n_channels_out: 5
+  base_ch: 32
+  kernel_size: 3
+  dropout: 0.1
+
+training:
+  batch_size: 128
+  epochs: 20
+  optimizer: adam
+  lr: 2.0e-5
+  weight_decay: 1.0e-6
+  scheduler: none
+  early_stopping_patience: 20
+  grad_clip_max_norm: 1.0
+  loss: mse_cosine
+
+evaluation:
+  metric: pearson_r
+  smooth_sigma_val: 1
+  smooth_sigma_test: 1
+
+logging:
+  use_wandb: false
+  tags: [bci4, nested_unet, deepfingernet, fullspec]

@@ -1,0 +1,71 @@
+# DeepFingerNet faithful reproduction config (Milestone 5.9)
+#
+# Paper: Tao et al. 2025, IEEE TIM, DOI: 10.1109/TIM.2025.3644562
+#
+# Input: raw bandpass-filtered ECoG (N_electrodes=62, T@100Hz)
+#   n_wavelets=0 → skips Morlet expansion, uses (62, 1, T) pipeline-compatible format
+#   n_channels_in = 62 * 1 = 62  →  Conv1d(62, 32, k=3) spatial reduce ~6K params
+#   Total params: ~340K  (matches paper's 1.30 MB model size)
+#
+# Data split: val_frac=0.0 → official BCI-IV train (400s) used for training,
+#   official test (200s) used as validation = matches their "predivided 6.5:3.5"
+#
+# Target: mean test_r ≈ 0.69 (S1=0.71, S2=0.59, S3=0.77) with no sigma smoothing
+#
+# Training matches paper exactly:
+#   - Adam, lr=2e-5, wd=1e-6, batch=128, max 20 epochs
+#   - No LR scheduler (paper uses fixed LR + early stopping)
+#   - Loss = 0.5*cosine + 0.5*MSE (λ=0.5, paper eq. 8)
+
+seed: 42
+
+data:
+  task: bci4
+  subject: 1
+  data_dir: data/fingerflex
+  bci4_data_dir: data/bci4
+  sr: 1000
+  n_targets: 5
+
+preprocessing_lomtev:
+  bandpass_lo: 40.0
+  bandpass_hi: 300.0
+  notch_freqs: [50]
+  n_wavelets: 0          # 0 = raw ECoG mode: skip wavelet expansion
+  downsample_fs: 100
+  time_delay_sec: 0.2
+  n_jobs: 1
+
+windowing_lomtev:
+  sample_len: 256
+  stride: 1
+
+split:
+  val_frac: 0.0          # official test set used as validation (matches paper)
+
+model:
+  name: nested_unet
+  n_channels_out: 5
+  base_ch: 32
+  kernel_size: 3
+  dropout: 0.1           # paper Fig. 2 shows Drop layers in encoder + decoder
+
+training:
+  batch_size: 128
+  epochs: 20
+  optimizer: adam
+  lr: 2.0e-5
+  weight_decay: 1.0e-6
+  scheduler: none         # paper: fixed LR + early stopping only
+  early_stopping_patience: 20
+  grad_clip_max_norm: 1.0
+  loss: mse_cosine        # 0.5*MSE + 0.5*cosine  (paper eq. 8, λ=0.5)
+
+evaluation:
+  metric: pearson_r
+  smooth_sigma_val: 1     # no smoothing — paper reports raw Pearson r
+  smooth_sigma_test: 1
+
+logging:
+  use_wandb: false
+  tags: [bci4, nested_unet, deepfingernet, reproduction, raw_ecog]

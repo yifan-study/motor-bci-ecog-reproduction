@@ -1,0 +1,60 @@
+# Raw ECoG U-Net config for fingerflex decoding
+# Skips spectrogram preprocessing — operates directly on filtered ECoG.
+# Uses wider frequency band (1-200 Hz) to capture low-freq motor potentials.
+
+seed: 42
+
+data:
+  task: fingerflex
+  patient: bp            # One of: bp, cc, ht, jc, jp, mv, wc, wm, zt
+  data_dir: data/fingerflex
+  sr: 1000               # Sampling rate (Hz)
+  n_targets: 5           # 5 fingers
+
+preprocessing:
+  pipeline_mode: ours    # filter → split → zscore → CAR → zscore targets
+  apply_car: true
+  notch_freqs: [60, 120, 180]
+  bandpass_lo: 1.0       # Wide band: captures low-freq motor potentials
+  bandpass_hi: 200.0
+  normalize: true
+
+windowing:
+  window_size: 1024      # Samples (= 1.024s at 1000 Hz)
+  hop_size: 100          # Samples (= 100 ms hop)
+
+split:
+  train_frac: 0.70
+  val_frac: 0.15
+  test_frac: 0.15
+
+model:
+  name: unet_raw
+  n_channels_out: 5
+  channels: [32, 32, 64, 64, 128, 128]
+  kernel_sizes: [7, 7, 5, 5, 5]
+  strides: [2, 2, 2, 2, 2]
+  dilation: [1, 1, 1, 1, 1]
+
+training:
+  batch_size: 32
+  epochs: 100
+  optimizer: adam
+  lr: 1.0e-3
+  weight_decay: 0.0
+  scheduler: reduce_on_plateau
+  scheduler_patience: 5
+  scheduler_factor: 0.5
+  early_stopping_patience: 15
+  grad_clip_max_norm: 1.0
+  loss: mse              # Plain MSE for raw pipeline
+
+evaluation:
+  metric: pearson_r
+  smooth_sigma_val: 0    # No smoothing for raw pipeline
+  smooth_sigma_test: 0
+
+logging:
+  use_wandb: true
+  wandb_project: plact-motor-decoding
+  tags: [miller, raw, unet]

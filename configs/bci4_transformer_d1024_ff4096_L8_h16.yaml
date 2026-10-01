@@ -1,0 +1,60 @@
+# d1024, L=8, ff=4096, h=16 — test more depth
+# Motivation: L6+h16 is better than L4+h16. Does L8 push further?
+
+seed: 123
+
+data:
+  task: bci4
+  subject: 1
+  data_dir: data/fingerflex
+  bci4_data_dir: data/bci4
+  sr: 1000
+  n_targets: 5
+
+preprocessing_lomtev:
+  bandpass_lo: 40.0
+  bandpass_hi: 300.0
+  notch_freqs: [50]
+  n_wavelets: 40
+  downsample_fs: 100
+  time_delay_sec: 0.2
+  n_jobs: 1
+
+windowing_lomtev:
+  sample_len: 256
+  stride: 1
+
+split:
+  val_frac: 0.15
+
+model:
+  name: transformer
+  d_model: 1024
+  n_layers: 8
+  n_heads: 16
+  dim_feedforward: 4096
+  spatial_kernel_size: 1
+  dropout: 0.1
+  strides: [1]
+
+training:
+  batch_size: 64
+  epochs: 40
+  optimizer: adam
+  lr: 8.42e-5
+  weight_decay: 1.0e-6
+  scheduler: reduce_on_plateau
+  scheduler_patience: 5
+  scheduler_factor: 0.5
+  early_stopping_patience: 15
+  grad_clip_max_norm: 1.0
+  loss: mse_cosine
+
+evaluation:
+  metric: pearson_r
+  smooth_sigma_val: 6
+  smooth_sigma_test: 1
+
+logging:
+  use_wandb: false
+  tags: [bci4, transformer, d1024, ff4096, L8, h16]
